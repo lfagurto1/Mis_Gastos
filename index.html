@@ -849,7 +849,7 @@ function savePhotoTx(){
   const base=sanitizeNum($("photoAmount").value);
   if(!name||!base){alert("Completa el establecimiento y un importe válido antes de guardar.");return;}
   const method=VALID_METHODS.has($("photoMethod").value)?$("photoMethod").value:"Otro";
-  const surcharge=method==="Tarjeta de crédito"?Math.max(0,Number($("photoSurcharge").value)||0):0;
+  const surcharge=(method==="Tarjeta de crédito"&&$("photoCategory").value==="Gasolina")?Math.max(0,Number($("photoSurcharge").value)||0):0;
   const amount=Math.round((base+surcharge)*100)/100;
   const note=surcharge>0?`Recargo tarjeta: $${surcharge.toFixed(2)}`:"Registrado desde foto";
   txs.unshift({id:crypto.randomUUID(),type:"expense",amount,name,date:$("photoDate").value||today(),category:sanitizeStr($("photoCategory").value,60),method,nature:"variable",note});
