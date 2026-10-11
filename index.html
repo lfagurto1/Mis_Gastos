@@ -702,7 +702,7 @@ function previewReceipt(e){
   const f=e.target.files[0];
   if(!f)return;
   // ISO 27001 A.12: validar tipo MIME de imagen
-  if(!["image/jpeg","image/png","image/webp","application/pdf"].includes(f.type)){alert("Solo se aceptan imágenes JPG, PNG, WebP o archivos PDF.");e.target.value="";return;}
+  if(!f.type.startsWith("image/")&&f.type!=="application/pdf"){alert("Solo se aceptan imágenes o archivos PDF.");e.target.value="";return;}
   if(f.size>10*1024*1024){alert("El archivo es demasiado grande (máx. 10 MB).");e.target.value="";return;}
   if(f.type==="application/pdf"){
     $("receiptPreview").classList.add("hidden");
@@ -849,7 +849,8 @@ function savePhotoTx(){
   const base=sanitizeNum($("photoAmount").value);
   if(!name||!base){alert("Completa el establecimiento y un importe válido antes de guardar.");return;}
   const method=VALID_METHODS.has($("photoMethod").value)?$("photoMethod").value:"Otro";
-  const surcharge=(method==="Tarjeta de crédito"&&$("photoCategory").value==="Gasolina")?Math.max(0,Number($("photoSurcharge").value)||0):0;
+  const isGasSurcharge=method==="Tarjeta de crédito"&&$("photoCategory").value==="Gasolina"&&!$("surchargeRow").classList.contains("hidden");
+  const surcharge=isGasSurcharge?Math.max(0,Number($("photoSurcharge").value)||0):0;
   const amount=Math.round((base+surcharge)*100)/100;
   const note=surcharge>0?`Recargo tarjeta: $${surcharge.toFixed(2)}`:"Registrado desde foto";
   txs.unshift({id:crypto.randomUUID(),type:"expense",amount,name,date:$("photoDate").value||today(),category:sanitizeStr($("photoCategory").value,60),method,nature:"variable",note});
