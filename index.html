@@ -317,7 +317,7 @@ tailwind.config={theme:{extend:{colors:{brand:{50:'#eef2ff',100:'#e0e7ff',500:'#
         </div>
         <div class="flex flex-col gap-1">
           <label class="text-xs text-slate-500 font-semibold">Categoría</label>
-          <select id="photoCategory" class="border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"></select>
+          <select id="photoCategory" onchange="toggleSurcharge()" class="border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"></select>
         </div>
         <div class="flex flex-col gap-1">
           <label class="text-xs text-slate-500 font-semibold">Medio de pago</label>
@@ -837,7 +837,11 @@ async function readReceipt(){
 }
 
 function toggleSurcharge(){
-  $("surchargeRow").classList.toggle("hidden",$("photoMethod").value!=="Tarjeta de crédito");
+  const isCard=$("photoMethod").value==="Tarjeta de crédito";
+  const isGas=$("photoCategory").value==="Gasolina";
+  const show=isCard&&isGas;
+  $("surchargeRow").classList.toggle("hidden",!show);
+  if(!show)$("photoSurcharge").value="0";
 }
 
 function savePhotoTx(){
