@@ -50,7 +50,7 @@ tailwind.config={theme:{extend:{colors:{brand:{50:'#eef2ff',100:'#e0e7ff',500:'#
 
   <!-- Hero -->
   <section class="bg-gradient-to-br from-brand-700 to-brand-500 text-white rounded-3xl p-6 mb-4 shadow-lg">
-    <p class="text-xs text-indigo-200 font-medium mb-1">Saldo del mes · ingresos menos egresos</p>
+    <p class="text-xs text-indigo-200 font-medium mb-1">Saldo últimos 30 días · ingresos menos egresos</p>
     <div class="text-4xl font-extrabold tracking-tight" id="net">$0,00</div>
     <div class="grid grid-cols-3 gap-3 mt-5">
       <div class="bg-white/10 border border-white/15 rounded-2xl p-3">
@@ -477,8 +477,10 @@ $("monthPicker").addEventListener("change",renderAll);
 function monthTxs(){return txs.filter(t=>t.date?.slice(0,7)===$("monthPicker").value)}
 function countable(t){return t.nature!=="transfer"}
 
+function last30Txs(){const d=new Date();d.setDate(d.getDate()-30);const from=d.toISOString().slice(0,10);return txs.filter(t=>t.date>=from&&t.date<=today())}
+
 function renderAll(){
-  const arr=monthTxs().filter(countable);
+  const arr=last30Txs().filter(countable);
   const inc=arr.filter(t=>t.type==="income").reduce((a,t)=>a+t.amount,0);
   const out=arr.filter(t=>t.type==="expense").reduce((a,t)=>a+t.amount,0);
   $("net").textContent=money(inc-out);
