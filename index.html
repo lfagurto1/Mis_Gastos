@@ -168,7 +168,8 @@ tailwind.config={theme:{extend:{colors:{brand:{50:'#eef2ff',100:'#e0e7ff',500:'#
   <main id="billsTab" class="hidden">
     <section class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
       <h3 class="font-semibold text-base mb-1">Pagos fijos y compromisos</h3>
-      <p class="text-slate-400 text-xs mb-4">Añade arriendo, internet, agua, luz, cuotas u otros pagos recurrentes. No se cuentan como gastos hasta que los marques como pagados.</p>
+      <p class="text-slate-400 text-xs mb-4">Haz clic en un pago para ingresar el valor y la fecha. Cuando vayas a pagar, usa el botón 💳 Pagar para registrarlo como gasto.</p>
+      <div id="billPresets" class="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-5"></div>
       <form id="billForm" onsubmit="addBill(event)">
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div class="flex flex-col gap-1">
@@ -176,7 +177,7 @@ tailwind.config={theme:{extend:{colors:{brand:{50:'#eef2ff',100:'#e0e7ff',500:'#
             <input id="billName" required placeholder="Ej. Arriendo" maxlength="80" class="border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
           </div>
           <div class="flex flex-col gap-1">
-            <label class="text-xs text-slate-500 font-semibold">Importe mensual ($)</label>
+            <label class="text-xs text-slate-500 font-semibold">Importe ($)</label>
             <input id="billAmount" required type="number" min="0.01" max="999999" step="0.01" placeholder="0,00" class="border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
           </div>
           <div class="flex flex-col gap-1">
@@ -186,12 +187,13 @@ tailwind.config={theme:{extend:{colors:{brand:{50:'#eef2ff',100:'#e0e7ff',500:'#
             </select>
           </div>
           <div class="flex flex-col gap-1">
-            <label class="text-xs text-slate-500 font-semibold">Día de vencimiento</label>
-            <input id="billDay" type="number" min="1" max="31" value="1" class="border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+            <label class="text-xs text-slate-500 font-semibold">Fecha de pago</label>
+            <input id="billDay" type="date" class="border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
           </div>
         </div>
-        <div class="mt-4">
+        <div class="mt-4 flex gap-2">
           <button class="bg-brand-600 text-white text-sm font-semibold rounded-xl px-5 py-2 hover:bg-brand-700 transition-colors">Guardar pago fijo</button>
+          <button type="button" id="billCancelEdit" class="hidden bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-xl px-4 py-2 hover:bg-slate-50" onclick="cancelEditBill()">Cancelar</button>
         </div>
       </form>
       <div id="billList" class="mt-5"></div>
@@ -358,7 +360,7 @@ const MAX_JSON_BYTES=2*1024*1024;
 const DRIVE_CLIENT_ID="TU_CLIENT_ID_AQUI.apps.googleusercontent.com";
 const DRIVE_SCOPE="https://www.googleapis.com/auth/drive.file";
 
-let txs=[], bills=[], notifs=[], editingId=null, photoData=null, driveToken=null, spendPct=80;
+let txs=[], bills=[], notifs=[], editingId=null, editingBillId=null, photoData=null, driveToken=null, spendPct=80;
 
 function loadStorage(){
   try{txs=JSON.parse(localStorage.getItem("mcf_txs")||"[]");if(!Array.isArray(txs))txs=[];}catch{txs=[];}
@@ -568,29 +570,98 @@ function deleteTx(id){
   if(confirm("¿Eliminar este movimiento?")){txs=txs.filter(t=>t.id!==id);persist();}
 }
 
+const BILL_PRESETS=[
+  {name:"Arriendo",category:"Vivienda",icon:"🏠"},
+  {name:"Internet Celerity",category:"Servicios b\u00e1sicos",icon:"🌐"},
+  {name:"Internet Fonet",category:"Servicios b\u00e1sicos",icon:"🌐"},
+  {name:"Agua",category:"Servicios b\u00e1sicos",icon:"💧"},
+  {name:"Luz",category:"Servicios b\u00e1sicos",icon:"💡"},
+];
+
+function renderBillPresets(){
+  const el=$("billPresets");
+  if(!el)return;
+  el.innerHTML=BILL_PRESETS.map(p=>{
+    const exists=bills.find(b=>b.name===p.name);
+    return `<button type="button" onclick="applyPreset('${esc(p.name)}','${esc(p.category)}')" class="flex items-center gap-2 border rounded-xl px-3 py-2 text-sm font-semibold transition-colors ${exists?"border-brand-500 bg-brand-50 text-brand-700":"border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}">${p.icon} ${esc(p.name)}${exists?" ✓":""}</button>`;
+  }).join("");
+}
+
+function applyPreset(name,category){
+  const existing=bills.find(b=>b.name===name);
+  if(existing){editBill(existing.id);return;}
+  $("billName").value=name;
+  $("billCategory").value=category;
+  $("billAmount").value="";
+  $("billDay").value="";
+  $("billAmount").focus();
+}
+
+function cancelEditBill(){
+  editingBillId=null;
+  $("billForm").reset();
+  $("billForm").querySelector("button[type=submit]").textContent="Guardar pago fijo";
+  $("billCancelEdit").classList.add("hidden");
+}
+
 function addBill(e){
   e.preventDefault();
   const name=sanitizeStr($("billName").value,80);
   const amount=sanitizeNum($("billAmount").value);
   if(!name||!amount){alert("Completa el concepto y un importe válido.");return;}
-  const day=Math.min(31,Math.max(1,parseInt($("billDay").value)||1));
-  bills.push({id:crypto.randomUUID(),name,amount,category:sanitizeStr($("billCategory").value,60),day});
-  $("billForm").reset();$("billDay").value=1;persist();
+  const day=$("billDay").value||"";
+  const item={id:editingBillId||crypto.randomUUID(),name,amount,category:sanitizeStr($("billCategory").value,60),day};
+  if(editingBillId){
+    bills=bills.map(b=>b.id===editingBillId?item:b);
+    editingBillId=null;
+    $("billForm").querySelector("button[type=submit]").textContent="Guardar pago fijo";
+    $("billCancelEdit").classList.add("hidden");
+  }else bills.push(item);
+  $("billForm").reset();persist();renderBillPresets();
+}
+
+function editBill(id){
+  const b=bills.find(x=>x.id===id);
+  if(!b)return;
+  editingBillId=id;
+  $("billName").value=b.name;
+  $("billAmount").value=b.amount;
+  $("billCategory").value=b.category;
+  $("billDay").value=b.day||"";
+  $("billForm").querySelector("button[type=submit]").textContent="Actualizar pago fijo";
+  $("billCancelEdit").classList.remove("hidden");
+  $("billAmount").focus();
+}
+
+function payBill(id){
+  const b=bills.find(x=>x.id===id);
+  if(!b)return;
+  openForm("expense");
+  $("txName").value=b.name;
+  $("txCategory").value=b.category;
+  $("txDate").value=b.day||today();
+  $("txAmount").value="";
+  $("txNote").value="Pago fijo";
 }
 
 function renderBills(){
   if(!$("billList"))return;
+  renderBillPresets();
   $("billList").innerHTML=bills.length
     ?bills.map(b=>`<div class="flex gap-3 items-center py-3 border-b border-slate-100 last:border-0">
         <div class="w-10 h-10 rounded-xl bg-slate-50 grid place-items-center text-lg flex-shrink-0">📅</div>
         <div class="min-w-0 flex-1">
           <strong class="block text-sm">${esc(b.name)}</strong>
-          <small class="text-slate-400 text-xs">${esc(b.category)} · vence día ${b.day}</small>
+          <small class="text-slate-400 text-xs">${esc(b.category)}${b.day?" · "+esc(b.day):""}</small>
+          <small class="block mt-0.5">
+            <button class="border border-slate-200 bg-white rounded-lg px-2 py-0.5 text-xs hover:bg-slate-50" onclick="editBill('${esc(b.id)}')">Editar</button>
+            <button class="border border-emerald-200 bg-emerald-50 text-emerald-700 rounded-lg px-2 py-0.5 text-xs hover:bg-emerald-100 ml-1" onclick="payBill('${esc(b.id)}')">💳 Pagar</button>
+            <button class="border border-slate-200 bg-white rounded-lg px-2 py-0.5 text-xs hover:bg-red-50 hover:text-red-600 ml-1" onclick="deleteBill('${esc(b.id)}')">Eliminar</button>
+          </small>
         </div>
         <div class="text-sm font-bold text-slate-700">${money(b.amount)}</div>
-        <button class="border border-slate-200 bg-white rounded-lg px-2 py-1 text-xs hover:bg-red-50 hover:text-red-600" onclick="deleteBill('${esc(b.id)}')">×</button>
       </div>`).join("")
-    :`<div class="py-6 text-center text-slate-400 text-sm">Todavía no has configurado pagos fijos.</div>`;
+    :`<div class="py-6 text-center text-slate-400 text-sm">Haz clic en un pago de arriba para configurarlo.</div>`;
 }
 
 function renderBillsSummary(){
@@ -959,11 +1030,16 @@ function pushNotif(msg,type="info"){
 
 function checkNotifs(inc,out,arr){
   const month=$("monthPicker").value;
-  const today2=today();
+  const todayFull=today();
   const todayDay=new Date().getDate();
-  // Pagos fijos que vencen mañana
   bills.forEach(b=>{
-    const daysLeft=b.day-todayDay;
+    if(!b.day)return;
+    let daysLeft;
+    if(/^\d{4}-\d{2}-\d{2}$/.test(b.day)){
+      daysLeft=Math.round((new Date(b.day)-new Date(todayFull))/(1000*60*60*24));
+    }else{
+      daysLeft=Number(b.day)-todayDay;
+    }
     if(daysLeft===1||daysLeft===0){
       const key=`bill-${b.id}-${month}`;
       if(!notifs.some(n=>n.key===key)){
@@ -1101,7 +1177,7 @@ async function saveToDrive(){
   }
 }
 
-renderAll();renderBills();renderNotifs();
+renderAll();renderBills();renderNotifs();renderBillPresets();
 </script>
 </body>
 </html>
