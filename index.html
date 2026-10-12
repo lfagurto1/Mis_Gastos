@@ -707,8 +707,8 @@ async function importBank(e){
   const wb=XLSX.read(buf,{type:"array",cellDates:true});
   const ws=wb.Sheets[wb.SheetNames[0]];
   const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:""});
-  // Buscar fila de encabezado que contenga "Fecha"
-  const hIdx=rows.findIndex(r=>r.some(c=>String(c).trim().toLowerCase()==="fecha"));
+  // Encabezado fijo en fila 6 (índice 5), con datos desde fila 7
+  const hIdx=rows.findIndex((r,i)=>i>=4&&r.some(c=>String(c).trim().toLowerCase()==="fecha"));
   if(hIdx===-1){alert("No se encontró la columna Fecha en el archivo.");e.target.value="";return;}
   const headers=rows[hIdx].map(c=>String(c).trim().toLowerCase());
   const iDate=headers.indexOf("fecha");
